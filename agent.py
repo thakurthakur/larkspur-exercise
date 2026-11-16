@@ -65,19 +65,18 @@ def run_agent(pnr: str, last_name: str, message: str) -> str:            # ✏�
         thinking={"type": "adaptive"}, tools=tools, messages=messages,
     )
 
-    answer = ""
     turns = 1
     while response.stop_reason == "tool_use" and turns < MAX_TOOL_CALLS:
-        messages.append({"role": "assistant", "content": text_of(response)})
-        messages.append({"role": "user", "content": tool_results(response)})
-        answer = text_of(response)
+        results = tool_results(response)
+        messages.append({"role": "assistant", "content": response.content})
+        messages.append({"role": "user", "content": results})
         response = client.messages.create(
             model=MODEL, max_tokens=4096, system=runtime_preamble() + SYSTEM_PROMPT + TONE_ADDENDUM,
             thinking={"type": "adaptive"}, tools=tools, messages=messages,
         )
         turns += 1
 
-    return answer
+    return text_of(response)
 
 
 def tool_list() -> List[Dict[str, Any]]:                   # ✏️ Build 2, step 2.2
@@ -118,15 +117,28 @@ def build_tools() -> List[Dict[str, Any]]:                 # ✏️ Build 1, ste
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "flight_no": {"type": "string"},
-                    "date": {"type": "string", "description": "MM/DD/YYYY"},
+                    "flight_no": {
+                        "type": "string",
+                        "description": "Flight number exactly as in the booking segment.",
+                    },
+                    "date": {
+                        "type": "string",
+                        "description": "Local departure date, YYYY-MM-DD, exactly as returned in the booking segment.",
+                    },
                 },
                 "required": ["flight_no", "date"],
             },
         },
         {
             "name": "search_alternatives",
-            "description": "search",
+            "description": (
+                "Find alternative Larkspur flights for the disrupted segment on this "
+                "booking. Use it after lookup_booking and get_flight_status show the "
+                "segment is cancelled or significantly delayed, and before offering the "
+                "customer any rebooking. Returns a list of options, each with an "
+                "option_id; pass the chosen option_id to hold_seat. Only offer options "
+                "this tool returned; never invent a flight."
+            ),
             "input_schema": {
                 "type": "object",
                 "properties": {"pnr": {"type": "string"}},
