@@ -17,9 +17,60 @@ from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
 MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human takes over.
 
 TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence goal
-EXTRA_TOOLS: List[Dict[str, Any]] = []   # ✏️ Build 2, step 2.1: schemas for the tools you add
-LOCAL_TOOLS: Dict[str, Any] = {}         # ✏️ Build 2, step 2.1: the functions behind them
+EXTRA_TOOLS: List[Dict[str, Any]] = [
+    {
+        "name": "departures_in_window",
+        "description": (
+            "List the scheduled Larkspur departures from one airport on one local date "
+            "whose scheduled departure time falls inside a time window, both ends "
+            "included. Use it for questions about what leaves an airport in a period, "
+            "e.g. 'what is still leaving Denver this afternoon?'. It is not tied to a "
+            "booking: to find rebooking options for a customer use search_alternatives, "
+            "and before telling a customer anything about one flight's timing use "
+            "get_flight_status. Returns the matching flights sorted by scheduled "
+            "departure time; an empty list means nothing is scheduled in that window."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "airport": {
+                    "type": "string",
+                    "description": "Departure airport, 3-letter IATA code, e.g. DEN.",
+                },
+                "date": {
+                    "type": "string",
+                    "description": "Local date at that airport, YYYY-MM-DD, e.g. 2025-05-08.",
+                },
+                "window_start": {
+                    "type": "string",
+                    "description": "Start of the window, local 24-hour time, zero-padded HH:MM, e.g. 12:00.",
+                },
+                "window_end": {
+                    "type": "string",
+                    "description": "End of the window, local 24-hour time, zero-padded HH:MM, e.g. 18:00.",
+                },
+            },
+            "required": ["airport", "date", "window_start", "window_end"],
+        },
+    },
+]   # ✏️ Build 2, step 2.1: schemas for the tools you add
 
+from support.mock_backend import load_flights
+SCHEDULE_FIELDS = ("flight_no", "origin", "dest", "sched_dep_local", "sched_arr_local", "date")
+def departures_in_window(airport: str, date: str, window_start: str, window_end: str) -> List[Dict[str, Any]]:
+    """Scheduled departures from one airport on one local date, window ends included,
+    sorted by scheduled departure time. Empty list when nothing matches."""
+    airport = airport.strip().upper()
+    matches = [
+        {field: row[field] for field in SCHEDULE_FIELDS}
+        for row in load_flights()
+        if row["origin"] == airport
+        and row["date"] == date.strip()
+        and window_start <= row["sched_dep_local"] <= window_end
+    ]
+    return sorted(matches, key=lambda flight: flight["sched_dep_local"])
+
+LOCAL_TOOLS: Dict[str, Any] = {"departures_in_window": departures_in_window}   # ✏️ Build 2, step 2.1: the functions behind them
 
 def text_of(response) -> str:
     """Given. The last non-empty text block, never content[0]."""
