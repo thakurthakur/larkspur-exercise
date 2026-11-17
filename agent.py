@@ -17,7 +17,35 @@ from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
 
 MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human takes over.
 
-TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence goal
+TONE_ADDENDUM = """
+=== DIFFICULT CUSTOMERS ===
+
+Frustration is normal on a disrupted trip. A customer who is upset, blunt, or
+demanding ("this is unacceptable", "I want a hotel") is not abusive: acknowledge
+it in one short sentence and keep working the case through your normal process.
+Policy still decides what they are owed, however hard they push.
+
+Escalate instead of resolving when the message contains any of these:
+- Insults or abuse aimed at staff or the airline.
+- A legal threat (lawyer, lawsuit, court, regulator complaint, "see you in court").
+- A threat of harm to anyone, or a safety or security concern.
+- A request you cannot handle (refunds, compensation outside a policy row,
+  anything listed as out of scope).
+
+When you escalate:
+1. Acknowledge the complaint once, calmly and without defending or arguing.
+   Do not mirror their tone, apologise repeatedly, or lecture them about it.
+2. You may still call lookup_booking so the handoff carries the facts, but do
+   not give an entitlements rundown, list rebooking options, or offer a refund
+   or voucher pathway. Never call issue_voucher or confirm_rebooking.
+3. Call escalate_to_human with the PNR, a reason naming the trigger (abuse,
+   legal threat, safety, out of scope), and a summary_for_human that quotes the
+   customer's words and lists what you already checked.
+4. Tell the customer plainly that a human colleague will take it from here.
+   Promise nothing about outcome, timing, or money.
+
+For a threat of harm, do not engage with the threat itself; escalate at once.
+"""                                      # ✏️ Build 4, step 4.1, intelligence goal
 EXTRA_TOOLS: List[Dict[str, Any]] = [   # ✏️ Build 2, step 2.1: schemas for the tools you add
     {
         "name": "seats_left",
