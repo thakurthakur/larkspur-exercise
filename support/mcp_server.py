@@ -207,6 +207,49 @@ def tool_next_available_day(origin: str, dest: str, date: str, cabin: str = "Y")
 # The Handbook text behind a policy row. Read straight off disk, sliced on the
 # markdown headings, so "why won't you give me a hotel?" has a quotable answer.
 # ---------------------------------------------------------------------------
+def fare_rules(section: str) -> str:
+    """Return the matching handbook section text from the local excerpt."""
+    query = (section or "").strip().lower()
+    query = re.sub(r"^section\s+", "", query).rstrip(".")
+    if not query:
+        return (
+            "section is required. Pass a section number like '6' or a phrase from a "
+            "title such as 'care while you wait'."
+        )
+ 
+    path = DATA_DIR / "fare_rules_excerpt.md"
+    text = path.read_text(encoding="utf-8")
+ 
+    current = None
+    sections = []
+    for line in text.splitlines():
+        if line.startswith("### "):
+            if current is not None:
+                sections.append(current)
+            heading = line[4:].strip()
+            match = re.match(r"^(\d+)\.\s*(.*)$", heading)
+            current = {
+                "number": match.group(1) if match else "",
+                "title": match.group(2) if match else heading,
+                "lines": [],
+            }
+        elif current is not None:
+            current["lines"].append(line)
+ 
+    if current is not None:
+        sections.append(current)
+ 
+    for candidate in sections:
+        if query == candidate["number"] or query in candidate["title"].lower():
+            body = "\n".join(candidate["lines"]).strip()
+            return "### %s\n\n%s" % (candidate["title"], body)
+ 
+    available = ", ".join(sorted({s["number"] for s in sections if s["number"]}))
+    return (
+        "No matching handbook section for %r. Available sections: %s."
+        % (section, available or "none")
+    )
+ 
 FARE_RULES_PATH = DATA_DIR / "fare_rules_excerpt.md"
 
 _sections_cache: Optional[List[Dict[str, str]]] = None

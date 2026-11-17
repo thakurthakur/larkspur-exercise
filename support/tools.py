@@ -28,7 +28,6 @@ from __future__ import annotations
 
 from . import mock_backend as backend
 from .trace import record_tool_result
-
 SSR_INVENTORY_CODES = {"PETC", "MEDA", "OXYG", "STCR", "ESAN"}
 
 CALL_LOG: list = []
@@ -75,6 +74,7 @@ def lookup_booking(pnr, last_name):
     }
 
 
+ 
 def search_alternatives(pnr):
     try:
         booking = backend.get_booking_raw(pnr)

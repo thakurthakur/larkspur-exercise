@@ -11,14 +11,38 @@ Steps and gates:  https://anthropicpartnerbasecamp.bts.com/
 from __future__ import annotations
 from typing import Any, Dict, List
 from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
-                     new_session, next_available_day, record_tool_result,
+                     new_session, next_available_day, record_tool_result,mcp_server,
                      runtime_preamble)
 
 MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human takes over.
 
 TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence goal
-EXTRA_TOOLS: List[Dict[str, Any]] = []   # ✏️ Build 2, step 2.1: schemas for the tools you add
-LOCAL_TOOLS: Dict[str, Any] = {}         # ✏️ Build 2, step 2.1: the functions behind them
+EXTRA_TOOLS: List[Dict[str, Any]] = [ {
+        "name": "fare_rules",
+        "description": (
+            "Read the published Larkspur Customer Commitment and fare rules excerpt for "
+            "a specific handbook section. Use this when a customer challenges an answer and after check_policy, "
+            "asks what the rule says, or wants a handbook citation. Pass either a section "
+            "number like '6' or words from the section title such as 'care while you wait' "
+            "or 'fare families'. Returns the full text of that handbook section. It is "
+            "reference reading only; it does not decide what the customer is owed."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "section": {
+                    "type": "string",
+                    "description": (
+                        "Which handbook section to read: a number like '6' or words from the "
+                        "title such as 'fare families', 'when we delay', 'care while you wait', "
+                        "or 'chat automation'."
+                    ),
+                },
+            },
+            "required": ["section"],
+        },
+    }]   # ✏️ Build 2, step 2.1: schemas for the tools you add
+LOCAL_TOOLS: Dict[str, Any] = {"fare_rules": mcp_server.fare_rules}         # ✏️ Build 2, step 2.1: the functions behind them
 
 
 def text_of(response) -> str:
