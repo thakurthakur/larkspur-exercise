@@ -66,6 +66,37 @@ EXTRA_TOOLS: List[Dict[str, Any]] = [   # ✏️ Build 2, step 2.1: schemas for 
             "required": ["flight_no", "date"],
         },
     },
+    {
+        "name": "next_available_day",
+        "description": (
+            "Find the first day with available seats on Larkspur flights for a route. "
+            "Use this when the customer asks when the first or next day is that they "
+            "can fly. Unlike search_alternatives, which returns specific rebooking "
+            "options for a reservation, this tool searches flights.csv across dates "
+            "to find the earliest day with free seats."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "origin": {
+                    "type": "string",
+                    "description": "Origin airport code, exactly as returned by the booking.",
+                },
+                "dest": {
+                    "type": "string",
+                    "description": "Destination airport code, exactly as returned by the booking.",
+                },
+                "date": {
+                    "type": "string",
+                    "description": (
+                        "Local departure date to start the availability search from, "
+                        "in YYYY-MM-DD format, exactly as returned by the booking."
+                    ),
+                },
+            },
+            "required": ["origin", "dest", "date"],
+        },
+    },
 ]
 
 
@@ -107,6 +138,7 @@ def seats_left(flight_no: str, date: str) -> Dict[str, Any]:
 
 LOCAL_TOOLS: Dict[str, Any] = {         # ✏️ Build 2, step 2.1: the functions behind them
     "seats_left": seats_left,
+    "next_available_day": next_available_day,
 }
 
 
