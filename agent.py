@@ -10,6 +10,7 @@ Steps and gates:  https://anthropicpartnerbasecamp.bts.com/
 """
 from __future__ import annotations
 from typing import Any, Dict, List
+from support import mock_backend as backend
 from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
                      new_session, next_available_day, record_tool_result,mcp_server,
                      runtime_preamble)
@@ -41,8 +42,96 @@ EXTRA_TOOLS: List[Dict[str, Any]] = [ {
             },
             "required": ["section"],
         },
-    }]   # ✏️ Build 2, step 2.1: schemas for the tools you add
-LOCAL_TOOLS: Dict[str, Any] = {"fare_rules": mcp_server.fare_rules}         # ✏️ Build 2, step 2.1: the functions behind them
+    },   # ✏️ Build 2, step 2.1: schemas for the tools you add
+    {
+        "name": "seats_left",
+        "description": (
+            "Look up the free seats left in each cabin of one flight on one date. "
+            "Use it when the customer asks whether there is room on a flight, or how many "
+            "seats are left, including for a whole party: compare the count with the number "
+            "of people the customer says are travelling, which can differ from the passengers "
+            "on the booking. "
+            "For a question about seats or room, call this first: it is the focused read "
+            "for exactly that. get_flight_status is for status, delay and cause, so add it "
+            "only when the answer also needs those. "
+            "It needs flight_no and date, which you take from lookup_booking "
+            "(segment.flight_number and segment.date) or from a search_alternatives option; "
+            "never ask the customer for them and never guess them. "
+            "Returns {\"seats_left_Y\": n, \"seats_left_J\": n}: Y is main (economy), J is first. "
+            "0 means that cabin is full, which is a real answer and not an error. A count "
+            "below the party size means the whole party does not fit in that cabin. "
+            "If get_flight_status already returned seats_left_Y and seats_left_J for the same "
+            "flight and date, do not call this as well. "
+            "search_alternatives already reports seats_available on each option, so do not "
+            "use this to re-check those. "
+            "On failure it returns {\"error\": ...}. 'Flight number ... not found' or "
+            "'Date ... not found' means the arguments do not match the data: re-read them "
+            "from the booking rather than trying other dates. 'No flight data for ...' means "
+            "the date is outside the days the data covers: say you cannot check seats for "
+            "that date, and do not retry other dates. An invalid date means fix it "
+            "and call again. 'Failed to load flight data' means the data is unavailable: "
+            "tell the customer you cannot check seats right now. "
+            "Only ever state a seat count this tool returned, never an estimate. The count is "
+            "a snapshot, not a reservation: hold_seat is what sets a seat aside."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "flight_no": {
+                    "type": "string",
+                    "description": "Flight number as it appears on the booking segment, e.g. LK415.",
+                },
+                "date": {
+                    "type": "string",
+                    "description": "Local flight date in ISO format YYYY-MM-DD, e.g. 2025-05-08. "
+                                   "Not MM/DD/YYYY.",
+                },
+            },
+            "required": ["flight_no", "date"],
+        },
+    },
+]
+
+
+def seats_left(flight_no: str, date: str) -> Dict[str, Any]:
+    """Free seats in each cabin of one flight on one date, read from flights.csv.
+
+    One pass over the rows. It answers with the numbers the data holds, or with an
+    {"error": ...} that says which argument did not match; it never fills in a
+    default number. call_local() only catches TypeError, so every expected failure
+    is returned here and never raised.
+    """
+    flight_no = str(flight_no).strip().upper()
+    date = str(date).strip()
+
+    if not backend.ISO_DATE.match(date):
+        return {"error": f"Invalid date '{date}': use ISO format YYYY-MM-DD."}
+    if not backend.DATA_HORIZON_START <= date <= backend.DATA_HORIZON_END:
+        return {"error": f"No flight data for {date}: the data covers "
+                         f"{backend.DATA_HORIZON_START} to {backend.DATA_HORIZON_END}."}
+
+    try:
+        rows = backend.load_flights()
+    except Exception as exc:  # noqa: BLE001 - the model reads this and can tell the customer
+        return {"error": f"Failed to load flight data: {exc}"}
+
+    flight_seen = False
+    for row in rows:
+        if row["flight_no"] != flight_no:
+            continue
+        flight_seen = True
+        if row["date"] == date:
+            return {"flight_no": flight_no, "date": date,
+                    "seats_left_Y": row["seats_left_Y"], "seats_left_J": row["seats_left_J"]}
+
+    if flight_seen:
+        return {"error": f"Date {date} not found for flight number {flight_no}."}
+    return {"error": f"Flight number {flight_no} not found."}
+
+
+LOCAL_TOOLS: Dict[str, Any] = {"fare_rules": mcp_server.fare_rules ,        # ✏️ Build 2, step 2.1: the functions behind them
+    "seats_left": seats_left,
+}
 
 
 def text_of(response) -> str:
@@ -106,7 +195,7 @@ def run_agent(pnr: str, last_name: str, message: str) -> str:            # ✏�
 def tool_list() -> List[Dict[str, Any]]:                   # ✏️ Build 2, step 2.2
     """Given. Exactly what Claude is offered on every turn; run.py --show-tools
     prints this list."""
-    return build_tools() + EXTRA_TOOLS
+    return build_tools() + EXTRA_TOOLS + mcp_client.tools()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
