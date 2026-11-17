@@ -3,7 +3,7 @@
 **To:** Room 14  
 **From:** Larkspur client review agent, on behalf of Priya Raghavan  
 **Re:** the disruption-care agent you walked us through in our last session  
-**Generated:** 2026-11-17 10:07
+**Generated:** 2026-11-17 10:23
 
 ## Priya's note
 
@@ -32,35 +32,35 @@ Larkspur pointed a review agent at your repository. It read the
 code. It did not run your agent, and the only file it changed is this one. Each
 item below names the file and the line it is about.
 
-**1. agent.py seats_left: the tool description runs 1822 characters and the other nine run 71 to 445.**
+**1. agent.py run_agent(): the loop now appends response.content to messages and returns text_of(response) from the last turn.**
 
-The pod's EXTRA_TOOLS entry for seats_left is more than four times as long as check_policy at 445 characters. It spells out error strings, party-size comparison and when not to call it versus get_flight_status and search_alternatives. The 13079 input tokens in readout-trace.json are re-sent on every one of 4 API turns, and nobody has measured what this one description adds to each.
+Your diff replaces the string-only assistant message with the full response.content, and drops the answer variable. With adaptive thinking enabled in the same create() call, the thinking blocks now travel back with each tool_use turn. readout-trace.json shows 4 API turns and 3 tool calls, so the loop continued past the first tool_use and ended on a non-tool stop.
 
-Run python3 run.py --tool-tax and paste the per-tool token breakdown.
+Run python3 run.py --all --trace and paste the totals footer so the 4-turn, 3-call shape is shown across every booking, not just the one in readout-trace.json.
 
-**2. agent.py hold_seat and send_confirmation descriptions are 73 and 71 characters and the pod's diff does not touch them.**
+**2. agent.py search_alternatives and get_flight_status: you rewrote both descriptions, and the 3-call trace never touches search_alternatives.**
 
-hold_seat reads "Place a 15-minute hold on one alternative. Reversible. It simply expires." It says nothing about which tool produces the option_id it requires. The diff rewrote search_alternatives and get_flight_status and added seats_left, and left these two as they shipped. The committed run called lookup_booking, get_flight_status and check_policy only, so neither tool has been exercised on the wire.
+The search_alternatives description went from "search" to a sentence that names lookup_booking and get_flight_status as prerequisites and says "never invent a flight". The get_flight_status date changed from "MM/DD/YYYY" to "YYYY-MM-DD". The committed trace calls lookup_booking, get_flight_status, check_policy and stops, so no run in this repository shows search_alternatives, hold_seat or issue_voucher being called.
 
-Run python3 run.py --all --trace and paste the totals footer plus the tool order for any booking that reaches hold_seat.
+Run python3 run.py --all --trace and paste the tools-called line for every PNR that is cancelled or delayed.
 
-**3. agent.py run_agent: the diff changed the loop to append response.content and return text_of(response) after the loop ends.**
+**3. agent.py build_tools(): hold_seat is 73 characters and send_confirmation is 71, both still one-line placeholders.**
 
-The shipped loop appended text_of(response) as the assistant turn and kept an answer variable from the previous turn. Yours appends the full content blocks, which is what thinking={"type": "adaptive"} needs to carry through tool_use turns. readout-trace.json shows thinking seen on the wire: True across 4 turns, 3 tool calls, and the stop at MAX_TOOL_CALLS = 8 has not been hit. You can claim a multi-turn loop that completes, on one booking.
+hold_seat reads "Place a 15-minute hold on one alternative. Reversible. It simply expires." and says nothing about needing an option_id from search_alternatives. send_confirmation reads "Send the customer a written confirmation of what was just done. Benign." The other seven descriptions run 216 to 445 characters. A larger model reads the same 73 characters.
 
-Run python3 run.py --all --trace and paste the totals footer so the loop is shown on more than one booking shape.
+Run python3 run.py --show-tools and paste the hold_seat and send_confirmation entries as the model sees them now.
 
-**4. readout-trace.json shows prompt caching at 0 read, 0 written, and agent.py contains no cache_control.**
+**4. readout-trace.json: prompt caching shows 0 read, 0 written on 13079 input tokens, and agent.py has no cache_control.**
 
-The committed run sent 13079 tokens in over 4 API turns with hit ratio None. A bigger model would be billed on those same uncached tokens at a higher rate. Priya's question about model choice has no baseline yet because no before and after exists. PITCH.md has no Number line and no Lever filled in.
+Every create() call resends runtime_preamble() + SYSTEM_PROMPT + TONE_ADDENDUM and all nine tool schemas, about 1,800 characters of descriptions alone. The trace reports hit ratio None across 4 turns. A model swap leaves that fixed prefix at the same size on every call.
 
-Run python3 bench.py --label before --stage 1 --runs 3, then python3 bench.py --compare before after after the change, and paste the compare output.
+Run python3 run.py --tool-tax and paste its output next to the readout-trace.json token totals.
 
-**5. TONE_ADDENDUM in agent.py is 0 characters and there is no evals/cases.json, so no case in this repo tests the agent's behavior.**
+**5. Eval cases and PITCH.md: there is no evals/cases.json, PITCH.md is the unchanged template, and the only banked gates are 1.2, 1.3 and 1.4.**
 
-Banked gates in readout.html are 1.2, 1.3, 1.4 only. Nothing under 2.x, 3.1 or 4.1 is banked, and the seats_left tool added in your diff has no gate behind it. Several given files, including verify.py, eval_harness.py and bench.py, differ from the shipped pack, so a number from them needs the diff behind it before it is quoted.
+readout.html was banked at 2026-11-16T13:22:08 by Sebastian Goscinski with three gates. TONE_ADDENDUM is 0 characters, EXTRA_TOOLS is 0, and there are no LOCAL_TOOLS executors. Nothing in the repository yet measures what any change, or any model, does to the pass rate, cost or latency. The one run on record is 13.2s wall clock and 13079 tokens in, on a single booking.
 
-Run python3 verify.py 2.1 and paste its output, and list which given files you edited and why.
+Run python3 bench.py --label baseline --stage 1 --runs 3 and paste the output so there is a number to compare a model or a prompt change against.
 
 ## Your four answers
 
@@ -81,11 +81,10 @@ not the problem, say so, and bring the number that shows it.
 
 ## What this review read
 
-- `agent.py (327 lines)`
-- `PITCH.md`
+- `agent.py (238 lines)`
+- `PITCH.md (unchanged template)`
 - `TEAM.md`
 - `readout-trace.json`
 - `readout.html (evidence block)`
-- given files that differ from the shipped pack: `verify.py`, `eval_harness.py`, `bench.py`, `readout.py`, `setup.py`, `pod_sync.py`, `run.py`, `review.py`, `support/__init__.py`, `support/client.py`, `support/data.py`, `support/models.py`, `support/tools.py`, `support/trace.py`, `support/offline.py`, `support/mock_backend.py`, `support/mcp_client.py`, `support/mcp_server.py`, `support/mcp_selftest.py`, `support/access.py`, `support/keyscan.py`, `support/review.py`
 
 Reviewer: `claude-sonnet-5-5`. Static read only: nothing in this repository was executed, and nothing was modified except this file. Larkspur Airlines is a fictional training scenario. Confidential, do not distribute.
